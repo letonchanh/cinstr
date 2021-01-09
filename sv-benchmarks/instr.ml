@@ -72,7 +72,18 @@ class add_builtin_body_visitor = object(self)
       if is_builtin vi.vname then
         let fd = emptyFunction vi.vname in
         (* print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype)); *)
-        setFunctionTypeMakeFormals fd vi.vtype;
+        let ftype = match vi.vtype with
+          | TFun (t, args_opt, b, attrs) ->
+            (match args_opt with
+            | None -> vi.vtype
+            | Some args ->
+              let nargs = List.map (fun (s, st, sattrs) ->
+					let ns = if s = "" then CM.mk_fresh_id () else s in
+					(ns, st, sattrs)) args in
+              TFun (t, Some nargs, b, attrs))
+          | _ -> vi.vtype
+        in
+        setFunctionTypeMakeFormals fd ftype;
         let stmts =
           if is_nondet vi.vname then 
             self#create_nondet_body fd ~is_unsigned:(fd.svar.vname = nondet_uint_name)

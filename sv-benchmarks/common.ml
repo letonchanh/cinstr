@@ -6,6 +6,11 @@ module L = List
 
 module SS = Set.Make(String)
 
+let nid = ref 0
+let mk_fresh_id () =
+  let id = (nid := !nid + 1; !nid) in
+  "tid" ^ (string_of_int id)
+
 let string_of_typ (s:typ) = Pretty.sprint ~width:80 (dn_type () s)
 let string_of_global (s:global) = Pretty.sprint ~width:80 (dn_global () s)
 let string_of_stmt (s:stmt) = Pretty.sprint ~width:80 (dn_stmt () s) 
