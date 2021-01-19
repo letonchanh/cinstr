@@ -98,42 +98,43 @@ class add_builtin_body_visitor = object(self)
 
 end
 
-class is_large_IULong_exp_visitor = object(self)
+class is_neg_IULong_exp_visitor = object(self)
   inherit nopCilVisitor
 
-  val mutable is_IULong = false
+  val mutable is_neg_IULong = false
 
   method vexpr (e: exp) =
     (match e with
     | Const c -> 
       (match c with
-      | CInt64 (v, IULong, _) -> 
-        let () = print_endline (Int64.to_string v) in
-        is_IULong <- true
+      | CInt64 (v, IULong, _) ->
+        if Int64.compare v Int64.zero < 0 then
+          let () = print_endline (Int64.to_string v) in
+          is_neg_IULong <- true
       | _ -> ())
     | _ -> ());
     DoChildren
 
-  method get_res () = is_IULong
+  method get_res () = is_neg_IULong
 end
 
-let is_large_IULong_exp (e: exp) =
-  let iev = new is_large_IULong_exp_visitor in
+let is_neg_IULong_exp (e: exp) =
+  let iev = new is_neg_IULong_exp_visitor in
   ignore (visitCilExpr (iev :> nopCilVisitor) e);
   iev#get_res ()
 
-class change_large_IULong_to_nondet_visitor = object(self)
+class change_neg_IULong_to_nondet_visitor = object(self)
   inherit nopCilVisitor
 
   method vinst (i: instr) =
     match i with
     | Set (l, e, _) ->
-      if is_large_IULong_exp e then
+      if is_neg_IULong_exp e then
         let nondet_call = CM.mkCall ~av:(Some l) nondet_int_name [] in
         ChangeTo [nondet_call]
       else SkipChildren
     | Call (l, _, el, _) ->
-      if List.exists is_large_IULong_exp el then
+      if List.exists is_neg_IULong_exp el then
         let nondet_call = CM.mkCall ~av:l nondet_int_name [] in
         ChangeTo [nondet_call]
       else SkipChildren
@@ -159,6 +160,6 @@ let () =
     ast.globals <- (GText adds)::ast.globals;
     
     let () = ignore (visitCilFile (new add_builtin_body_visitor) ast) in
-    let () = ignore (visitCilFile (new change_large_IULong_to_nondet_visitor) ast) in
+    let () = ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast) in
     CM.writeSrc instr_src ast
   end
