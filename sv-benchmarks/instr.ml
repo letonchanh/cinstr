@@ -98,6 +98,18 @@ class add_builtin_body_visitor = object(self)
 
 end
 
+class mk_nondet_assign = object(self)
+  inherit nopCilVisitor
+  method vfunc fd =
+     ignore (Printf.printf "mknondet: fn=%s\n" fd.svar.vname);
+     DoChildren
+  method vstmt st = 
+     match st.skind with
+     | Instr(il) -> ignore (Printf.printf "  vstmt found instruction list\n"); DoChildren
+     | _ -> DoChildren
+
+end
+
 let () = 
   begin    
     initCIL();
@@ -117,5 +129,6 @@ let () =
     ast.globals <- (GText adds)::ast.globals;
     
     let () = ignore (visitCilFile (new add_builtin_body_visitor) ast) in
+    let () = ignore (visitCilFile (new mk_nondet_assign) ast) in
     CM.writeSrc instr_src ast
   end
