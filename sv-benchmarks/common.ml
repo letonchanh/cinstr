@@ -209,6 +209,14 @@ let mkCall ?(ftype=TVoid []) ?(av=None) (fname:string) args : instr =
   let f = var(mkVi ~ftype:ftype fname) in
   Call(av, Lval f, args, !currentLoc)
 
+(*
+let vi2e (vi: varinfo): exp = Lval (var vi)
+
+let mk_Call ?(ftype=TVoid []) ?(av=None) (fname: string) args : instr = 
+  let fvar = makeVarinfo true fname ftype in
+  Call(av, vi2e fvar, args, !currentLoc)
+*)
+
 let mkFunTyp (rt : typ) (args : (string * typ) list) : typ =
   TFun(rt, Some(L.map (fun a -> (fst a, snd a, [])) args), false, [])
 

@@ -71,7 +71,7 @@ class add_builtin_body_visitor = object(self)
     | GVarDecl (vi, loc) ->
       if is_builtin vi.vname then
         let fd = emptyFunction vi.vname in
-        (* print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype)); *)
+        print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype));
         let ftype = match vi.vtype with
           | TFun (t, args_opt, b, attrs) ->
             (match args_opt with
@@ -98,16 +98,46 @@ class add_builtin_body_visitor = object(self)
 
 end
 
-class mk_nondet_assign = object(self)
+class is_large_IULong_exp_visitor = object(self)
   inherit nopCilVisitor
-  method vfunc fd =
-     ignore (Printf.printf "mknondet: fn=%s\n" fd.svar.vname);
-     DoChildren
-  method vstmt st = 
-     match st.skind with
-     | Instr(il) -> ignore (Printf.printf "  vstmt found instruction list\n"); DoChildren
-     | _ -> DoChildren
 
+  val mutable is_IULong = false
+
+  method vexpr (e: exp) =
+    (match e with
+    | Const c -> 
+      (match c with
+      | CInt64 (v, IULong, _) -> 
+        let () = print_endline (Int64.to_string v) in
+        is_IULong <- true
+      | _ -> ())
+    | _ -> ());
+    DoChildren
+
+  method get_res () = is_IULong
+end
+
+let is_large_IULong_exp (e: exp) =
+  let iev = new is_large_IULong_exp_visitor in
+  ignore (visitCilExpr (iev :> nopCilVisitor) e);
+  iev#get_res ()
+
+class change_large_IULong_to_nondet_visitor = object(self)
+  inherit nopCilVisitor
+
+  method vinst (i: instr) =
+    match i with
+    | Set (l, e, _) ->
+      if is_large_IULong_exp e then
+        let nondet_call = CM.mkCall ~av:(Some l) nondet_int_name [] in
+        ChangeTo [nondet_call]
+      else SkipChildren
+    | Call (l, _, el, _) ->
+      if List.exists is_large_IULong_exp el then
+        let nondet_call = CM.mkCall ~av:l nondet_int_name [] in
+        ChangeTo [nondet_call]
+      else SkipChildren
+    | _ -> DoChildren
 end
 
 let () = 
@@ -129,6 +159,6 @@ let () =
     ast.globals <- (GText adds)::ast.globals;
     
     let () = ignore (visitCilFile (new add_builtin_body_visitor) ast) in
-    let () = ignore (visitCilFile (new mk_nondet_assign) ast) in
+    let () = ignore (visitCilFile (new change_large_IULong_to_nondet_visitor) ast) in
     CM.writeSrc instr_src ast
   end
