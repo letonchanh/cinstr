@@ -1,4 +1,5 @@
 open Cil
+open Printf
 module E = Errormsg
 module H = Hashtbl
 module P = Printf	     
@@ -109,7 +110,7 @@ class is_neg_IULong_exp_visitor = object(self)
       (match c with
       | CInt64 (v, IULong, _) ->
         if Int64.compare v Int64.zero < 0 then
-          let () = print_endline (Int64.to_string v) in
+          (* let () = print_endline (Int64.to_string v) in *)
           is_neg_IULong <- true
       | _ -> ())
     | _ -> ());
@@ -141,6 +142,27 @@ class change_neg_IULong_to_nondet_visitor = object(self)
     | _ -> DoChildren
 end
 
+(* Main *)
+let filename = ref ""
+let cbe_trans = ref false
+
+let usage = "usage: " ^ Sys.argv.(0) ^ " [-d] filename"
+
+let speclist = [
+  ("-d", Arg.Set cbe_trans, ": transform decompiled code");
+]
+
+let parse_cmdline = 
+  begin
+    Arg.parse speclist (fun x -> filename := x) usage;
+    try
+      if !filename = "" then
+        raise (Arg.Bad ("missing argument: no input file name given"))
+    with
+    | Arg.Bad msg ->
+       (eprintf "%s: %s\n" Sys.argv.(0) msg; eprintf "%s\n" usage; exit 1)
+  end
+
 let () = 
   begin    
     initCIL();
@@ -150,16 +172,20 @@ let () =
     Cil.useLogicalOperators := true;
     Rmtmps.rmUnusedInlines := true;
 
-    let src = Sys.argv.(1) in
+    let () = parse_cmdline in
+    let src = !filename in
     let instr_src = src ^ ".instr.c" in (* instrument for execution *)
     let ast = Frontc.parse src () in
 
-    let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
-    let includes = L.map (fun x -> "#include \"" ^ x ^ "\"") includes in
-    let adds = S.concat "\n" includes in
-    ast.globals <- (GText adds)::ast.globals;
-    
-    let () = ignore (visitCilFile (new add_builtin_body_visitor) ast) in
-    let () = ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast) in
+    let () = 
+      if !cbe_trans then
+        ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast)
+      else
+        let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
+        let includes = L.map (fun x -> "#include \"" ^ x ^ "\"") includes in
+        let adds = S.concat "\n" includes in
+        ast.globals <- (GText adds)::ast.globals;
+        ignore (visitCilFile (new add_builtin_body_visitor) ast)
+    in    
     CM.writeSrc instr_src ast
   end
