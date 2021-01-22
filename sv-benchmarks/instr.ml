@@ -11,6 +11,15 @@ let nondet_int_name = "__VERIFIER_nondet_int"
 let nondet_uint_name = "__VERIFIER_nondet_uint"
 let assert_fail_name = "__assert_fail"
 
+let llvm_intrinsic_builtin_function_map =
+  [ "llvm_add_u32", PlusA; 
+    "llvm_add_u64", PlusA; 
+    "llvm_lshr_u32", Shiftrt;
+    "llvm_lshr_u64", Shiftrt; 
+    "llvm_and_u8", BAnd;
+    "llvm_or_u8", BOr; 
+    "llvm_xor_u8", BXor ]
+
 let is_nondet fname =
   fname = nondet_int_name || fname = nondet_uint_name
 
@@ -142,6 +151,37 @@ class change_neg_IULong_to_nondet_visitor = object(self)
     | _ -> DoChildren
 end
 
+class change_llvm_intrinsic_builtin_function_to_op_visitor = object(self)
+  inherit nopCilVisitor
+
+  method vinst (i: instr) =
+    match i with
+    | Call (lvar, fv, fargs, loc) ->
+      (match lvar with
+      | None -> SkipChildren
+      | Some lv -> 
+        (match fv with
+        | Lval (Var v, _) -> 
+          (try
+            let op = List.assoc v.vname llvm_intrinsic_builtin_function_map in
+            (match fargs with
+            | e1::e2::[] ->
+              (match v.vtype with
+              | TFun (t, _, _, _) ->
+                let e = BinOp (op, e1, e2, t) in
+                let assign = Set (lv, e, loc) in
+                ChangeTo [assign]
+              | _ -> SkipChildren
+              )
+            | _ -> SkipChildren
+            )
+          with Not_found -> SkipChildren)
+        | _ -> SkipChildren
+        )
+      )
+    | _ -> DoChildren
+end
+
 (* Main *)
 let filename = ref ""
 let cbe_trans = ref false
@@ -179,7 +219,8 @@ let () =
 
     let () = 
       if !cbe_trans then
-        ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast)
+        (ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
+        ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast))
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
         let includes = L.map (fun x -> "#include \"" ^ x ^ "\"") includes in
