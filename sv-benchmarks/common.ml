@@ -244,6 +244,13 @@ let find_fun (ast:file) (fun_name:string) : fundec =
   | Some f -> f
   | None -> E.s (E.error "fun '%s' not in '%s'!" fun_name ast.fileName)
 
+let rec find_global_var (gl : global list) (varname : string) : varinfo =
+  match gl with
+  | [] -> E.s (E.error "Global not found: %s" varname)
+  | GVarDecl(vi, _) :: _ when vi.vname = varname -> vi
+  | GVar(vi, _, _) :: _ when vi.vname = varname -> vi
+  | _ :: rst -> find_global_var rst varname
+
 let exp_of_vi (vi:varinfo): exp = Lval (var vi)
 				       
 (*[Some 1, None, Some 2] -> [1,2]*)

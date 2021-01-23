@@ -10,6 +10,7 @@ module CM = Common
 let nondet_int_name = "__VERIFIER_nondet_int"
 let nondet_uint_name = "__VERIFIER_nondet_uint"
 let assert_fail_name = "__assert_fail"
+let state_reg_rax_name = "STATE_REG_RAX"
 
 let llvm_intrinsic_builtin_function_map =
   [ "llvm_add_u32", PlusA; 
@@ -23,6 +24,13 @@ let llvm_intrinsic_builtin_function_map =
 let is_nondet fname =
   fname = nondet_int_name || fname = nondet_uint_name
 
+let find_nondet_func fname =
+  let r = Str.regexp ".*\\(__VERIFIER_nondet_.+\\)" in
+  if Str.string_match r fname 0 then
+    Some (Str.replace_first r "\\1" fname)
+  else
+    None
+
 let is_assert_fail fname = fname = assert_fail_name
 
 let is_builtin fname = is_nondet fname || is_assert_fail fname
@@ -32,6 +40,11 @@ let is_int_type typ =
   | TInt _ -> true
   | _ -> false
  
+let only_functions (fn : fundec -> location -> unit) (g : global) : unit = 
+  match g with
+  | GFun(f, loc) -> fn f loc
+  | _ -> ()
+
 class add_builtin_body_visitor = object(self)
   inherit nopCilVisitor
 
@@ -180,6 +193,25 @@ class change_llvm_intrinsic_builtin_function_to_op_visitor = object(self)
         )
       )
     | _ -> DoChildren
+end
+
+class change_nondet_body_visitor ast = object(self)
+  inherit nopCilVisitor
+
+  val state_reg_rax = CM.find_global_var ast.globals state_reg_rax_name
+
+  method private create_nondet_assignment_to_reg_rax fd nd_func : stmt = 
+    mkStmtOneInstr (CM.mkCall ~av:(Some (var state_reg_rax)) nd_func [])
+
+  method vfunc fd =
+    let action fd =
+      match find_nondet_func fd.svar.vname with
+      | None -> fd
+      | Some nd -> 
+        let _ = fd.sbody.bstmts <- [self#create_nondet_assignment_to_reg_rax fd nd] in
+        fd
+    in
+    ChangeDoChildrenPost (fd, action)
 end
 
 (* Main *)
