@@ -195,23 +195,34 @@ class change_llvm_intrinsic_builtin_function_to_op_visitor = object(self)
     | _ -> DoChildren
 end
 
-class change_nondet_body_visitor ast = object(self)
+class change_nondet_assignment_visitor ast = object(self)
   inherit nopCilVisitor
 
   val state_reg_rax = CM.find_global_var ast.globals state_reg_rax_name
 
-  method private create_nondet_assignment_to_reg_rax fd nd_func : stmt = 
-    mkStmtOneInstr (CM.mkCall ~av:(Some (var state_reg_rax)) nd_func [])
+  method private create_nondet_assignment_to_reg_rax nd_func : instr = 
+    CM.mkCall ~av:(Some (var state_reg_rax)) nd_func []
 
-  method vfunc fd =
+  (* method vfunc fd =
     let action fd =
       match find_nondet_func fd.svar.vname with
       | None -> fd
       | Some nd -> 
-        let _ = fd.sbody.bstmts <- [self#create_nondet_assignment_to_reg_rax fd nd] in
+        let _ = fd.sbody.bstmts <- [mkStmtOneInstr (self#create_nondet_assignment_to_reg_rax nd)] in
         fd
     in
-    ChangeDoChildrenPost (fd, action)
+    ChangeDoChildrenPost (fd, action) *)
+
+    method vinst (i: instr) =
+      match i with
+      | Call (lvar, fv, fargs, loc) ->
+        (match fv with
+        | Lval (Var v, _) -> 
+          (match find_nondet_func v.vname with
+          | None -> SkipChildren
+          | Some nd -> ChangeTo [self#create_nondet_assignment_to_reg_rax nd])
+        | _ -> SkipChildren) 
+      | _ -> SkipChildren
 end
 
 (* Main *)
@@ -252,7 +263,8 @@ let () =
     let () = 
       if !cbe_trans then
         (ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
-        ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast))
+        ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
+        ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast))
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
         let includes = L.map (fun x -> "#include \"" ^ x ^ "\"") includes in
