@@ -94,7 +94,7 @@ class add_builtin_body_visitor = object(self)
     | GVarDecl (vi, loc) ->
       if is_builtin vi.vname then
         let fd = emptyFunction vi.vname in
-        print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype));
+        (* print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype)); *)
         let ftype = match vi.vtype with
           | TFun (t, args_opt, b, attrs) ->
             (match args_opt with
@@ -213,12 +213,10 @@ class change_nondet_assignment_visitor ast = object(self)
     ChangeDoChildrenPost (fd, action) *)
 
   method vinst (i: instr) =
-    let _ = print_endline (CM.string_of_instr i) in
     match i with
     | Call (lvar, fv, fargs, loc) ->
       (match fv with
       | Lval (Var v, _) -> 
-        let _ = print_endline v.vname in
         (match find_nondet_func v.vname with
         | None -> SkipChildren
         | Some nd -> ChangeTo [self#create_nondet_assignment_to_reg_rax nd])
