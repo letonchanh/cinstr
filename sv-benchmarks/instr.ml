@@ -25,7 +25,7 @@ let is_nondet fname =
   fname = nondet_int_name || fname = nondet_uint_name
 
 let find_nondet_func fname =
-  let r = Str.regexp ".*\\(__VERIFIER_nondet_.+\\)" in
+  let r = Str.regexp ".+\\(__VERIFIER_nondet_.+\\)" in
   if Str.string_match r fname 0 then
     Some (Str.replace_first r "\\1" fname)
   else
@@ -94,7 +94,7 @@ class add_builtin_body_visitor = object(self)
     | GVarDecl (vi, loc) ->
       if is_builtin vi.vname then
         let fd = emptyFunction vi.vname in
-        print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype));
+        (* print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype)); *)
         let ftype = match vi.vtype with
           | TFun (t, args_opt, b, attrs) ->
             (match args_opt with
@@ -288,10 +288,12 @@ let () =
 
     let () = 
       if !cbe_trans then
-        (ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
-        ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
-        ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
-        ignore (visitCilFile (new remove_pointer_cast_visitor) ast))
+        (
+          ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
+          ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
+          ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
+          ignore (visitCilFile (new remove_pointer_cast_visitor) ast)
+        )
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
         let includes = L.map (fun x -> "#include \"" ^ x ^ "\"") includes in
