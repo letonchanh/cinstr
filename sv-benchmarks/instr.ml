@@ -25,7 +25,7 @@ let is_nondet fname =
   fname = nondet_int_name || fname = nondet_uint_name
 
 let find_nondet_func fname =
-  let r = Str.regexp ".*\\(__VERIFIER_nondet_.+\\)" in
+  let r = Str.regexp ".+\\(__VERIFIER_nondet_.+\\)" in
   if Str.string_match r fname 0 then
     Some (Str.replace_first r "\\1" fname)
   else
@@ -213,10 +213,12 @@ class change_nondet_assignment_visitor ast = object(self)
     ChangeDoChildrenPost (fd, action) *)
 
   method vinst (i: instr) =
+    let _ = print_endline (CM.string_of_instr i) in
     match i with
     | Call (lvar, fv, fargs, loc) ->
       (match fv with
       | Lval (Var v, _) -> 
+        let _ = print_endline v.vname in
         (match find_nondet_func v.vname with
         | None -> SkipChildren
         | Some nd -> ChangeTo [self#create_nondet_assignment_to_reg_rax nd])
@@ -288,10 +290,12 @@ let () =
 
     let () = 
       if !cbe_trans then
-        (ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
-        ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
-        ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
-        ignore (visitCilFile (new remove_pointer_cast_visitor) ast))
+        (
+          ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
+          ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
+          ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
+          ignore (visitCilFile (new remove_pointer_cast_visitor) ast)
+        )
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
         let includes = L.map (fun x -> "#include \"" ^ x ^ "\"") includes in
