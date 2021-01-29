@@ -198,9 +198,8 @@ end
 class change_nondet_assignment_visitor ast = object(self)
   inherit nopCilVisitor
 
-  val state_reg_rax = CM.find_global_var ast.globals state_reg_rax_name
-
   method private create_nondet_assignment_to_reg_rax nd_func : instr = 
+    let state_reg_rax = CM.find_global_var ast.globals state_reg_rax_name in
     CM.mkCall ~av:(Some (var state_reg_rax)) nd_func []
 
   (* method vfunc fd =
@@ -213,17 +212,44 @@ class change_nondet_assignment_visitor ast = object(self)
     in
     ChangeDoChildrenPost (fd, action) *)
 
-    method vinst (i: instr) =
-      match i with
-      | Call (lvar, fv, fargs, loc) ->
-        (match fv with
-        | Lval (Var v, _) -> 
-          (match find_nondet_func v.vname with
-          | None -> SkipChildren
-          | Some nd -> ChangeTo [self#create_nondet_assignment_to_reg_rax nd])
-        | _ -> SkipChildren) 
-      | _ -> SkipChildren
+  method vinst (i: instr) =
+    match i with
+    | Call (lvar, fv, fargs, loc) ->
+      (match fv with
+      | Lval (Var v, _) -> 
+        (match find_nondet_func v.vname with
+        | None -> SkipChildren
+        | Some nd -> ChangeTo [self#create_nondet_assignment_to_reg_rax nd])
+      | _ -> SkipChildren) 
+    | _ -> SkipChildren
 end
+
+class remove_pointer_cast_visitor = object(self)
+  inherit nopCilVisitor
+
+  method vlval (l: lval) =
+    let lh, _ = l in
+    match lh with
+    | Mem (CastE (TPtr _, AddrOf v)) -> ChangeTo v
+    | _ -> SkipChildren 
+end
+
+(* class restore_type_single_field_struct_visitor = object(self)
+  inherit nopCilVisitor
+
+  val type_tbl =
+
+    H.create 10 
+
+  method vglob (g: global) = 
+    (match g with
+    | GCompTag (c, _) ->
+
+      print_endline ("GCompTag " ^ c.cname ^ ": " ^ (String.concat "; " (List.map (fun f -> f.fname ^ ": " ^ (CM.string_of_typ f.ftype)) c.cfields)))
+    | _ -> ()
+    ); 
+    DoChildren
+end *)
 
 (* Main *)
 let filename = ref ""
@@ -264,7 +290,8 @@ let () =
       if !cbe_trans then
         (ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
         ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
-        ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast))
+        ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
+        ignore (visitCilFile (new remove_pointer_cast_visitor) ast))
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
         let includes = L.map (fun x -> "#include \"" ^ x ^ "\"") includes in
