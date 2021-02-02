@@ -230,8 +230,16 @@ class remove_pointer_cast_visitor = object(self)
   method vlval (l: lval) =
     let lh, _ = l in
     match lh with
-    | Mem (CastE (TPtr (t, _), AddrOf v)) when t = typeOfLval v -> ChangeTo v
-    | _ -> SkipChildren 
+    | Mem (CastE (TPtr (t, _), AddrOf v)) ->
+      let tv = typeOfLval v in
+      let is_same_ikind = 
+        match unrollType tv, unrollType t with
+        | TInt (tik, _), TInt (ik, _) -> unsignedVersionOf tik = unsignedVersionOf ik
+        | _ -> false 
+      in
+      if t = tv || is_same_ikind then ChangeTo v
+      else DoChildren
+    | _ -> SkipChildren
 end
 
 (* class restore_type_single_field_struct_visitor = object(self)
@@ -283,7 +291,7 @@ class has_array_access_visitor v = object(self)
 end
 
 let has_array_access ast v =
-  let nav = (new has_array_access_visitor) v in
+  let nav = new has_array_access_visitor v in
   ignore (visitCilFile (nav :> nopCilVisitor) ast);
   nav#get_res ()
 
