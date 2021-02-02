@@ -230,7 +230,7 @@ class remove_pointer_cast_visitor = object(self)
   method vlval (l: lval) =
     let lh, _ = l in
     match lh with
-    | Mem (CastE (TPtr _, AddrOf v)) -> ChangeTo v
+    | Mem (CastE (TPtr (t, _), AddrOf v)) when t = typeOfLval v -> ChangeTo v
     | _ -> SkipChildren 
 end
 
@@ -251,10 +251,10 @@ end
     DoChildren
 end *)
 
-class has_no_array_access_visitor v = object(self)
+class has_array_access_visitor v = object(self)
   inherit nopCilVisitor
 
-  val mutable has_no_array_access = false
+  val mutable has_array_access = false
 
   method private is_array_access_offset host_type offset =
     match offset with
@@ -274,16 +274,16 @@ class has_no_array_access_visitor v = object(self)
         | TFun _ -> DoChildren
         | _ ->
           (if self#is_array_access_offset vi.vtype offset then
-            (has_no_array_access <- true; SkipChildren)
+            (has_array_access <- true; SkipChildren)
           else DoChildren)
       else DoChildren
     | Mem _ -> DoChildren
 
-    method get_res () = has_no_array_access
+    method get_res () = has_array_access
 end
 
-let has_no_array_access ast v =
-  let nav = (new has_no_array_access_visitor) v in
+let has_array_access ast v =
+  let nav = (new has_array_access_visitor) v in
   ignore (visitCilFile (nav :> nopCilVisitor) ast);
   nav#get_res ()
 
@@ -328,14 +328,18 @@ let () =
           ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
           ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
           ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
-          ignore (visitCilFile (new remove_pointer_cast_visitor) ast);
           ignore (iterGlobals ast 
             (fun g ->
-              let print vi = print_endline (vi.vname ^ ": " ^ (string_of_bool (has_no_array_access ast vi.vname))) in
+              let change_type vi = 
+                let _ = print_endline (vi.vname ^ ": " ^ (string_of_bool (has_array_access ast vi.vname))) in
+                if not (has_array_access ast vi.vname) then vi.vtype <- intType
+                else ()
+              in
               match g with
-              | GVar (vi, _, _) -> print vi
-              | GFun (fd, _) -> List.iter (fun vi -> print vi) (fd.sformals @ fd.slocals) 
-              | _ -> ()))
+              | GVar (vi, _, _) -> change_type vi
+              | GFun (fd, _) -> List.iter (fun vi -> change_type vi) (fd.sformals @ fd.slocals) 
+              | _ -> ()));
+              ignore (visitCilFile (new remove_pointer_cast_visitor) ast);
         )
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
