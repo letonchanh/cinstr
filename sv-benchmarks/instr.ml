@@ -330,9 +330,11 @@ let () =
           ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
           ignore (visitCilFile (new remove_pointer_cast_visitor) ast);
           ignore (iterGlobals ast 
-            (fun g -> 
+            (fun g ->
+              let print vi = print_endline (vi.vname ^ ": " ^ (string_of_bool (has_no_array_access ast vi.vname))) in
               match g with
-              | GVar (vi, _, _) -> print_endline (vi.vname ^ ": " ^ (string_of_bool (has_no_array_access ast vi.vname)))
+              | GVar (vi, _, _) -> print vi
+              | GFun (fd, _) -> List.iter (fun vi -> print vi) (fd.sformals @ fd.slocals) 
               | _ -> ()))
         )
       else
