@@ -287,6 +287,27 @@ let has_array_access ast v =
   ignore (visitCilFile (nav :> nopCilVisitor) ast);
   nav#get_res ()
 
+let rec fold_type t =
+  match t with
+  | TArray (at, ae, _) ->
+    (match at with
+    | TInt (ti, attrs) ->
+      (try
+        let al = lenOfArray ae in
+        let sizeof_ti = bytesSizeOfInt ti in
+        let nti = intKindForSize (al * sizeof_ti) false in (* signed *)
+        TInt (nti, attrs)
+      with _ -> t)
+    | _ -> t)
+  | TComp (cinfo, _) -> 
+    (* if List.length cinfo.cfields == 1 then
+      fold_type cinfo.cfields[0].ftype
+    else t *)
+    (match cinfo.cfields with
+    | fi::[] -> fold_type fi.ftype
+    | _ -> t)
+  | _ -> t
+
 (* Main *)
 let filename = ref ""
 let cbe_trans = ref false
@@ -332,14 +353,14 @@ let () =
             (fun g ->
               let change_type vi = 
                 let _ = print_endline (vi.vname ^ ": " ^ (string_of_bool (has_array_access ast vi.vname))) in
-                if not (has_array_access ast vi.vname) then vi.vtype <- intType
+                if not (has_array_access ast vi.vname) then vi.vtype <- fold_type vi.vtype
                 else ()
               in
               match g with
               | GVar (vi, _, _) -> change_type vi
               | GFun (fd, _) -> List.iter (fun vi -> change_type vi) (fd.sformals @ fd.slocals) 
               | _ -> ()));
-              ignore (visitCilFile (new remove_pointer_cast_visitor) ast);
+          ignore (visitCilFile (new remove_pointer_cast_visitor) ast)
         )
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
