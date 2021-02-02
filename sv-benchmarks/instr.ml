@@ -290,7 +290,7 @@ let has_array_access ast v =
 let rec fold_type_opt t =
   match t with
   | TArray (at, ae, _) ->
-    (match ((*unrollType*) at) with
+    (match (unrollType at) with
     | TInt (ti, attrs) ->
       (try
         let al = lenOfArray ae in
