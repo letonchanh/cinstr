@@ -17,6 +17,7 @@ let string_of_stmt (s:stmt) = Pretty.sprint ~width:80 (dn_stmt () s)
 let string_of_exp (s:exp) = Pretty.sprint ~width:80 (dn_exp () s) 
 let string_of_instr (s:instr) = Pretty.sprint ~width:80 (dn_instr () s) 
 let string_of_lv (s:lval) = Pretty.sprint ~width:80 (dn_lval () s)
+let string_of_offset (s:offset) = Pretty.sprint ~width:80 (d_offset Pretty.nil () s)
 
 let const_exp_of_string (t:typ) (s:string): exp = match t with
   | TInt _ -> integer (int_of_string s)

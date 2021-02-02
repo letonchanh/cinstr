@@ -251,6 +251,42 @@ end
     DoChildren
 end *)
 
+class has_no_array_access_visitor v = object(self)
+  inherit nopCilVisitor
+
+  val mutable has_no_array_access = false
+
+  method private is_array_access_offset host_type offset =
+    match offset with
+    | NoOffset -> false
+    | Index _ -> true
+    | Field (finfo, foffset) ->
+      (match typeOffset host_type offset with
+      | TArray _ -> true
+      | _ -> self#is_array_access_offset finfo.ftype foffset)
+
+  method vlval (lv: lval) =
+    let host, offset = lv in
+    match host with
+    | Var vi -> 
+      if vi.vname = v then
+        match vi.vtype with
+        | TFun _ -> DoChildren
+        | _ ->
+          (if self#is_array_access_offset vi.vtype offset then
+            (has_no_array_access <- true; SkipChildren)
+          else DoChildren)
+      else DoChildren
+    | Mem _ -> DoChildren
+
+    method get_res () = has_no_array_access
+end
+
+let has_no_array_access ast v =
+  let nav = (new has_no_array_access_visitor) v in
+  ignore (visitCilFile (nav :> nopCilVisitor) ast);
+  nav#get_res ()
+
 (* Main *)
 let filename = ref ""
 let cbe_trans = ref false
@@ -292,7 +328,12 @@ let () =
           ignore (visitCilFile (new change_neg_IULong_to_nondet_visitor) ast);
           ignore (visitCilFile (new change_llvm_intrinsic_builtin_function_to_op_visitor) ast);
           ignore (visitCilFile (new change_nondet_assignment_visitor ast) ast);
-          ignore (visitCilFile (new remove_pointer_cast_visitor) ast)
+          ignore (visitCilFile (new remove_pointer_cast_visitor) ast);
+          ignore (iterGlobals ast 
+            (fun g -> 
+              match g with
+              | GVar (vi, _, _) -> print_endline (vi.vname ^ ": " ^ (string_of_bool (has_no_array_access ast vi.vname)))
+              | _ -> ()))
         )
       else
         let includes = ["stdio.h"; "stdlib.h"; "assert.h"; "math.h"] in 
