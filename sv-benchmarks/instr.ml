@@ -287,26 +287,26 @@ let has_array_access ast v =
   ignore (visitCilFile (nav :> nopCilVisitor) ast);
   nav#get_res ()
 
-let rec fold_type t =
+let rec fold_type_opt t =
   match t with
   | TArray (at, ae, _) ->
-    (match (unrollType at) with
+    (match ((*unrollType*) at) with
     | TInt (ti, attrs) ->
       (try
         let al = lenOfArray ae in
         let sizeof_ti = bytesSizeOfInt ti in
         let nti = intKindForSize (al * sizeof_ti) false in (* signed *)
-        TInt (nti, attrs)
-      with _ -> t)
-    | _ -> t)
+        Some (TInt (nti, attrs))
+      with _ -> None)
+    | _ -> None)
   | TComp (cinfo, _) -> 
     (* if List.length cinfo.cfields == 1 then
       fold_type cinfo.cfields[0].ftype
     else t *)
     (match cinfo.cfields with
-    | fi::[] -> fold_type fi.ftype
-    | _ -> t)
-  | _ -> t
+    | fi::[] -> fold_type_opt fi.ftype
+    | _ -> None)
+  | _ -> None
 
 (* Main *)
 let filename = ref ""
@@ -354,7 +354,7 @@ let () =
               let change_type vi = 
                 (* let _ = print_endline (vi.vname ^ ": " ^ (string_of_bool (has_array_access ast vi.vname))) in *)
                 if not (has_array_access ast vi.vname) then 
-                  let nt = fold_type vi.vtype in
+                  let nt = match fold_type_opt vi.vtype with | Some t -> t | None -> vi.vtype in
                   let _ = print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype) ^ " -> " ^ (CM.string_of_typ nt)) in
                   vi.vtype <- nt 
                 else ()
