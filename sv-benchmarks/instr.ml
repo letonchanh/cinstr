@@ -352,8 +352,11 @@ let () =
           ignore (iterGlobals ast 
             (fun g ->
               let change_type vi = 
-                let _ = print_endline (vi.vname ^ ": " ^ (string_of_bool (has_array_access ast vi.vname))) in
-                if not (has_array_access ast vi.vname) then vi.vtype <- fold_type vi.vtype
+                (* let _ = print_endline (vi.vname ^ ": " ^ (string_of_bool (has_array_access ast vi.vname))) in *)
+                if not (has_array_access ast vi.vname) then 
+                  let nt = fold_type vi.vtype in
+                  let _ = print_endline (vi.vname ^ ": " ^ (CM.string_of_typ vi.vtype) ^ " -> " ^ (CM.string_of_typ nt)) in
+                  vi.vtype <- nt 
                 else ()
               in
               match g with
